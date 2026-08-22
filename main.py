@@ -7,6 +7,7 @@ from MyHelpers.Frame import Frame
 from MyHelpers.TrackBar import Slider
 
 
+def read_frames(): ...
 
 
 if __name__ == "__main__":
