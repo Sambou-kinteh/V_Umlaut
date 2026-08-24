@@ -32,7 +32,7 @@ class Features:
 
     @property
     def features(self):
-        return self.__features
+        return self.__features      # (<=N, 3, 2)
 
     @features.setter
     def features(self, features):
@@ -41,10 +41,7 @@ class Features:
         assert isinstance(features, ndarray), "Invalid feature type"
         self.__features = features
 
-    def remove_outliners(self, outliner_mask : ndarray):
-
-        # todo should remove from both feature objects
-        pass
+    def remove_outliers(self, inlier_mask : ndarray): self.features = self.__features[inlier_mask, ...]
 
     def __next__(self) -> ndarray:
 
