@@ -41,7 +41,7 @@ class Features:
         assert isinstance(features, ndarray), "Invalid feature type"
         self.__features = features
 
-    def remove_outliners(self, outliners : ndarray):
+    def remove_outliners(self, outliner_mask : ndarray):
 
         # todo should remove from both feature objects
         pass
@@ -54,10 +54,11 @@ class Features:
     def __iter__(self): return self
 
 
-    def __sift(self, N : int, minDistance : int, threshold : float = .75) -> ndarray:
+    def __sift(self, N : int, minDistance : int, threshold : float = .80) -> ndarray:
 
         # TODO add min distance filtering
 
+        #---------- definition and invoking
         sift = cv.SIFT.create(
             nfeatures=N,
         )
@@ -75,13 +76,17 @@ class Features:
         flann = cv.FlannBasedMatcher(index_params, search_params)
         matches = flann.knnMatch(descr1, descr2, k=2)
 
-        good_matches = []
+        #---------- extraction and processing
+        points1 = []
+        points2 = []
+
         for i, j in matches:
             if i.distance < threshold * j.distance:
-                good_matches.append(i)
+                points1.append(kp1[i.queryIdx].pt)
+                points2.append(kp2[i.trainIdx].pt)
 
-        points1 = np.float32([kp1[each.queryIdx].pt for each in good_matches])  # (N, 2)
-        points2 = np.float32([kp2[each.trainIdx].pt for each in good_matches])  # (N, 2)
+        points1 = np.float32(points1)   # (N, 2)
+        points2 = np.float32(points2)   # (N, 2)
 
         points1_homogenous = np.column_stack([points1, np.ones(len(points1), dtype=np.float32)])  # (N, 3)
         points2_homogenous = np.column_stack([points2, np.ones(len(points2), dtype=np.float32)])  # (N, 3)
