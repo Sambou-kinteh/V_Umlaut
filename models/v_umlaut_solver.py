@@ -1,4 +1,5 @@
 
+import sys
 import numpy as np
 import sympy as sp
 
@@ -26,9 +27,14 @@ class VUmlaut(Model):
     @model.setter
     def model(self, model): self.__F = model
 
-    def isVUmlaut(self, points : ndarray) -> bool:      # TODO IMPLEMENT
-        # check geometry , lines and geometry if neccessary
+    @staticmethod
+    def isVUmlaut(points : ndarray, corresp4) -> bool:
 
+        delta : float = .001
+
+        if np.abs(np.linalg.det(points[..., 0])) < delta or np.abs(np.linalg.det(points[..., 1])) < delta: return False
+        elif (np.any(np.abs(np.linalg.inv(points[..., 0]) @ corresp4[..., 0]) < delta) or
+              np.any(np.abs(np.linalg.inv(points[..., 1]) @ corresp4[..., 1]) < delta)): return False
 
         return True
 
@@ -38,7 +44,9 @@ class VUmlaut(Model):
 
         assert points is not None
         if isMinimal: assert points.shape == (3, 5, 2)        # 2 dim matrix , (..., 0) -> p, (..., 1) -> q. points stacked horizontally
-        assert self.isVUmlaut(points), "Invalid configuration of points"
+        if not self.isVUmlaut(points[:, :3], points[:, 3, :]):
+            print("Invalid configuration of points", file=sys.stderr)
+            return
 
         #---------- perspective normalisation
         A1_inv = np.linalg.inv(points[:, :3, 0])
@@ -79,13 +87,15 @@ class VUmlaut(Model):
         if self.method == self.METHOD_MATRIX: self.model = H2.T @ self.matrix_method(Z, W, Z_extra, W_extra) @ H1
         elif self.method == self.METHOD_SYMBOLIC: self.model = H2.T @ self.symbolic_method(Z, W, Z_extra, W_extra) @ H1
 
-
     def project(self, features : ndarray):
 
         # features.shape = (N, 3, 2), W * F * Z.T
         return np.einsum('ij, ji -> i', features[..., 1], self.model @ features[..., 0].T)    # projection error
 
-    def non_minimal_refit(self, points : ndarray): self.fit(points, False)
+    def non_minimal_refit(self, points : ndarray):
+
+        assert points.shape[1] >= 5, "Not enough points to continue"
+        self.fit(points, False)
 
     @staticmethod
     def determine_dependent_points(points : ndarray) -> tuple:
@@ -119,14 +129,13 @@ class VUmlaut(Model):
         system : list = [sp.expand(F.sum())]
 
         # Gleichungen 2, 3, 4 + (..., n)
-
         extra_dim = Z_extra.shape[1] if Z_extra is not None else 0
         for i in range(3 + extra_dim):
 
             system.append(sp.expand(
-                (W[:, i].T @ F @ Z[:, i]).item()
+                (W[:, i].T @ F @ Z[:, i])
                 if i < 3
-                else (W_extra[:, i - 3].T @ F @ Z_extra[:, i - 3]).item()
+                else (W_extra[:, i - 3].T @ F @ Z_extra[:, i - 3])
 
             ))  # sp.Matrix.mutiply(sp.Matrix.multiply(W[:, i].T, F), Z[:, i])
 

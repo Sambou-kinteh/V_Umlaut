@@ -37,13 +37,16 @@ class Features:
     @features.setter
     def features(self, features):
 
-        assert self.__features is None, "Features have already been set"
         assert isinstance(features, ndarray), "Invalid feature type"
         self.__features = features
 
-    def remove_outliers(self, inlier_mask : ndarray): self.features = self.__features[inlier_mask, ...]
+    def remove_outliers(self, inlier_mask : ndarray|None):
+
+        if inlier_mask is not None: self.features = self.__features[inlier_mask, ...]
 
     def __next__(self) -> ndarray:
+
+        if self.__features.shape[0] < self.__n: raise StopIteration("Not enough points to continue")
 
         sample_row_indices = np.random.choice(self.__features.shape[0], size=self.__n, replace=False)   # replace = True for repeating points
         return self.__features[sample_row_indices, ...]     # (n, 3, 2)
@@ -51,7 +54,7 @@ class Features:
     def __iter__(self): return self
 
 
-    def __sift(self, N : int, minDistance : int, threshold : float = .80) -> ndarray:
+    def __sift(self, N : int, minDistance : int, threshold : float = .75) -> ndarray:
 
         # TODO add min distance filtering
 
