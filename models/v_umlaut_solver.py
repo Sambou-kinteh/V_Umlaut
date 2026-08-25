@@ -26,9 +26,11 @@ class VUmlaut(Model):
     @model.setter
     def model(self, model): self.__F = model
 
-    def isVUmlaut(self, points : ndarray) -> bool:
+    def isVUmlaut(self, points : ndarray) -> bool:      # TODO IMPLEMENT
         # check geometry , lines and geometry if neccessary
-        ...
+
+
+        return True
 
     def fit(self, points : ndarray, isMinimal : bool = True):
 
@@ -48,10 +50,25 @@ class VUmlaut(Model):
         H1 = D1_inv @ A1_inv
         H2 = D2_inv @ A2_inv
 
-        p6, q6, p7, q7 = self.determine_dependent_points()
+        p6, q6, p7, q7 = self.determine_dependent_points(points[:, :3])
 
         Z = H1 @ np.column_stack((points[:, 4, 0], p6, p7))   # i = 5, 6, 7
         W = H2 @ np.column_stack((points[:, 4, 1], q6, q7))   # i = 5, 6, 7
+
+        #---------- bringing i = 6, 7 into barycentric coordinates: ]0, 1[
+
+        s11 = Z[:, 1][0] / (Z[:, 1][0] + Z[:, 1][1])       # s11 = z61 / (z61 + z62)
+        s21 = W[:, 1][0] / (W[:, 1][0] + W[:, 1][1])       # s21 = w61 / (w61 + w62)
+
+        s12 = Z[:, -1][0] / (Z[:, -1][0] + Z[:, -1][-1])   # s12 = z71 / (z71 + z73)
+        s22 = W[:, -1][0] / (W[:, -1][0] + W[:, -1][-1])   # s22 = w71 / (w71 + w73)
+
+        Z[:, 1] = (s11, 1-s11, 0)
+        W[:, 1] = (s21, 1-s21, 0)
+
+        Z[:, -1] = (s12, 0, 1-s12)
+        W[:, -1] = (s22, 0, 1-s22)
+
 
         if not isMinimal:
             Z_extra, W_extra = points[:, 5:, 0], points[:, 5:, 1]         # i = 6, ..., n
@@ -70,7 +87,20 @@ class VUmlaut(Model):
 
     def non_minimal_refit(self, points : ndarray): self.fit(points, False)
 
-    def determine_dependent_points(self) -> list[tuple]: ...    # TODO TO IMPLEMENT
+    @staticmethod
+    def determine_dependent_points(points : ndarray) -> tuple:
+
+        # let
+        s11, s21, s12, s22 = .5, .5, .5, .5         # todo jitter if neccessary
+        p1 = points[:, 0, 0]
+        q1 = points[:, 0, 1]
+
+        return (
+            s11 * p1 + (1 - s11) * points[:, 1, 0],         # p6 = s11 * p1 + (1- s11) * p2
+            s21 * q1 + (1 - s21) * points[:, 1, 1],         # q6 = s21 * q1 + (1- s21) * q2
+            s12 * p1 + (1 - s12) * points[:, -1, 0],        # p7 = s12 * p1 + (1- s12) * p3
+            s22 * q1 + (1 - s22) * points[:, -1, 1]         # q7 = s22 * q1 + (1- s22) * q3
+        )
 
     @staticmethod
     def symbolic_method(Z : ndarray, W : ndarray, Z_extra : ndarray|None, W_extra : ndarray|None):
