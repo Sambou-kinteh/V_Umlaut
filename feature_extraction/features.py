@@ -9,11 +9,6 @@ from MyHelpers.Frame import Frame
 
 class Features:
 
-    # TODO features werden bei der init definiert
-    # TODO Features liefert alle punkte mit __next__() random i (hier 5) punkte ausspuckt
-    # TODO speichert nach jeder iteration nur inliner
-    # TODO kann am ende alle inliner ausgeben
-
     EXTRACTOR_SIFT : Final = 0
     EXTRACTOR_ORB : Final = 1
     EXTRACTOR_SURF : Final = 2
@@ -50,6 +45,22 @@ class Features:
 
         sample_row_indices = np.random.choice(self.__features.shape[0], size=self.__n, replace=False)   # replace = True for repeating points
         return self.__features[sample_row_indices, ...]     # (n, 3, 2)
+
+        # for example in the paper
+        # X = np.zeros((4, 7))
+        # X[0, :] = (1, 0, 0, 1, 2, 1/4, 1/2)
+        # X[1, :] = (0, 1, 0, 1, 3, 3/4, 0)
+        # X[2, :] = (0, 0, 1, 1, 1, 0, 1/2)
+        # X[3, :] = 1
+        #
+        # P = np.column_stack((np.identity(3), (0, 0, 0)))
+        #
+        # Q = np.zeros((3, 4))
+        # Q[0, :] = (-18/299, 5/299, 5/299, -5/299)
+        # Q[1, :] = (1/483, -22/483, 1/483, -1/483)
+        # Q[2, :] = (6/253, 6/253, -17/253, -6/253)
+
+        # return np.dstack([P @ X, Q @ X])        # (3, 7, 2)
 
     def __iter__(self): return self
 

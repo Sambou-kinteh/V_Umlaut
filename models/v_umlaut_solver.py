@@ -12,6 +12,7 @@ class VUmlaut(Model):
 
     METHOD_SYMBOLIC : Final = "symbolic_method"
     METHOD_MATRIX : Final = "matrix_method"
+    METHOD_MACAULAY_CLOSED_FORM : Final = "closed_form_method"
 
     # todo convert asserts into raises and printouts after testing
 
@@ -30,7 +31,7 @@ class VUmlaut(Model):
     @staticmethod
     def isVUmlaut(points : ndarray, corresp4) -> bool:
 
-        delta : float = .001
+        delta : float = 1e-6
 
         if np.abs(np.linalg.det(points[..., 0])) < delta or np.abs(np.linalg.det(points[..., 1])) < delta: return False
         elif (np.any(np.abs(np.linalg.inv(points[..., 0]) @ corresp4[..., 0]) < delta) or
@@ -58,10 +59,34 @@ class VUmlaut(Model):
         H1 = D1_inv @ A1_inv
         H2 = D2_inv @ A2_inv
 
+        # normal
         p6, q6, p7, q7 = self.determine_dependent_points(points[:, :3])
 
         Z = H1 @ np.column_stack((points[:, 4, 0], p6, p7))   # i = 5, 6, 7
         W = H2 @ np.column_stack((points[:, 4, 1], q6, q7))   # i = 5, 6, 7
+
+        # for the example in the paper
+        # Z = H1 @ points[:, 4:, 0]
+        # W = H2 @ points[:, 4:, 1]
+
+        if not isMinimal:
+            Z_extra, W_extra = H1 @ points[:, 5:, 0], H2 @ points[:, 5:, 1]         # i = 6, ..., n
+        else:
+            Z_extra, W_extra = None, None
+
+        # punkte argmentieren
+        iter_over = (0, )
+        for i in range(len(iter_over) + (0 if Z_extra is None else Z_extra.shape[1])):
+
+            delta = 1e-6
+            if i < len(iter_over):
+                if abs(Z[:, i][-1]) > delta: Z[:, i] /= Z[:, i][-1]
+                if abs(W[:, i][-1]) > delta: W[:, i] /= W[:, i][-1]
+
+            else:
+                i -= len(iter_over)
+                if abs(Z_extra[:, i][-1]) > delta: Z_extra[:, i] /= Z_extra[:, i][-1]
+                if abs(W_extra[:, i][-1]) > delta: W_extra[:, i] /= W_extra[:, i][-1]
 
         #---------- bringing i = 6, 7 into barycentric coordinates: ]0, 1[
 
@@ -76,12 +101,6 @@ class VUmlaut(Model):
 
         Z[:, -1] = (s12, 0, 1-s12)
         W[:, -1] = (s22, 0, 1-s22)
-
-
-        if not isMinimal:
-            Z_extra, W_extra = points[:, 5:, 0], points[:, 5:, 1]         # i = 6, ..., n
-        else:
-            Z_extra, W_extra = None, None
 
         #---------- solving and denormalising F
         if self.method == self.METHOD_MATRIX: self.model = H2.T @ self.matrix_method(Z, W, Z_extra, W_extra) @ H1
@@ -137,11 +156,11 @@ class VUmlaut(Model):
                 if i < 3
                 else (W_extra[:, i - 3].T @ F @ Z_extra[:, i - 3])
 
-            ))  # sp.Matrix.mutiply(sp.Matrix.multiply(W[:, i].T, F), Z[:, i])
+            ))
 
         # Gleichung 5, det constraint und wegwerfen von spurious fällen
         system.append(sp.expand(
-            ((W[:, -1][-1] * Z[:, -1][0] * f23) / (W[:, -1][0] * Z[:, -1][-1])
+            ((W[:, -1][0] * Z[:, -1][-1] * f23) / (W[:, -1][-1] * Z[:, -1][0])
              + (W[:, -2][0] * Z[:, -2][-2]) / (W[:, -2][-2] * Z[:, -2][0]))
         ))
 
@@ -153,6 +172,10 @@ class VUmlaut(Model):
         #---------- recovery of F
         F[0, 1], F[0, 2], F[1, 0], F[1, 2], F[2, 0] = [float(each) for each in tuple(solution)[0]]
         F.astype(np.float64)        # safety measure
+
+        # for example in the paper
+        # print("Symbolische Methode (mit Sympy):")
+        # print(F)
 
         return F
 
@@ -189,8 +212,12 @@ class VUmlaut(Model):
             b[i + 4] = -wi[2]*zi[1]
 
         # det constraint für rg = 2 und linearität
-        A[-1, 3] = (W[:, -1][-1] * Z[:, -1][0]) / (W[:, -1][0] * Z[:, -1][-1])      # w73*z71 / w71*z73
-        b[-1] = - (W[:, -2][0] * Z[:, -2][-2]) / (W[:, -2][-2] * Z[:, -2][0])       # w61*z62 / w62*z61
+        A[-1, 3] = (W[:, -1][0] * Z[:, -1][-1]) / (W[:, -1][-1] * Z[:, -1][0])
+        b[-1] = -(W[:, -2][0] * Z[:, -2][-2]) / (W[:, -2][-2] * Z[:, -2][0])
+
+        delta = 1e-6
+        A[np.abs(A) < delta] = 0
+        b[np.abs(b) < delta] = 0
 
         #---------- linear solution for (f12, f13, f21, f23, f31)
         f = np.linalg.lstsq(A, b, rcond=None)[0]       # A hat maximal 5 von null verschiedenen Singulärwerte
@@ -199,6 +226,10 @@ class VUmlaut(Model):
             [f[2], 0, f[3]],
             [f[4], 1, 0]
         ])
+
+        # for example in the paper
+        # print("Matrix-Methode:")
+        # print(F)
 
         return F
 
