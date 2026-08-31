@@ -1,5 +1,4 @@
 
-import sys
 import numpy as np
 import sympy as sp
 
@@ -12,15 +11,21 @@ class VUmlaut(Model):
 
     METHOD_SYMBOLIC : Final = "symbolic_method"
     METHOD_MATRIX : Final = "matrix_method"
-    METHOD_MACAULAY_CLOSED_FORM : Final = "closed_form_method"
-
-    # todo convert asserts into raises and printouts after testing
 
     def __init__(self, method: str = METHOD_MATRIX):
 
         self.method = method
         self.__F = None
+        self.v_umlaut_sij = 0.4971              # can be changed during LO in RANSAC, experimental average
         super().__init__()
+
+        #----------------------- Experimental Values
+        # current average = 0.4971
+        self.good_values = [0.5110551259847875, 0.33914248024278837, 0.18233438184315487, 0.5967517839931419, 0.32076094673598354,
+                            0.4235798829852677, 0.09844013399589535, 0.5500227949478695, 0.6207799337997877, 0.2816573430926693,
+                            0.4726866883882649, 0.06757658867159988, 0.9322628217108037, 0.7199098545025675, 0.6115610118705175,
+                            0.32853819062504275, 0.7719097486076748, 0.9116853972465421, 0.47849023820184067, 0.5616037344954625,
+                            0.6590904757193937]
 
     @property
     def model(self): return self.__F
@@ -31,7 +36,7 @@ class VUmlaut(Model):
     @staticmethod
     def isVUmlaut(points : ndarray, corresp4) -> bool:
 
-        delta : float = 1e-6
+        delta : float = 1e-4
 
         if np.abs(np.linalg.det(points[..., 0])) < delta or np.abs(np.linalg.det(points[..., 1])) < delta: return False
         elif (np.any(np.abs(np.linalg.inv(points[..., 0]) @ corresp4[..., 0]) < delta) or
@@ -42,12 +47,13 @@ class VUmlaut(Model):
     def fit(self, points : ndarray, isMinimal : bool = True):
 
         # recieves the 5 points and sets model.model to newly determined F
+        # expected (3, 5, 2)
 
-        assert points is not None
-        if isMinimal: assert points.shape == (3, 5, 2)        # 2 dim matrix , (..., 0) -> p, (..., 1) -> q. points stacked horizontally
-        if not self.isVUmlaut(points[:, :3], points[:, 3, :]):
-            print("Invalid configuration of points", file=sys.stderr)
-            return
+        if points is None: raise ValueError("No points to fit to model")
+
+        k = points.shape[1]
+        if isMinimal and k != 5: raise ValueError("Invalid number of correspondences")
+        if not self.isVUmlaut(points[:, :3], points[:, 3, :]): return
 
         #---------- perspective normalisation
         A1_inv = np.linalg.inv(points[:, :3, 0])
@@ -59,22 +65,15 @@ class VUmlaut(Model):
         H1 = D1_inv @ A1_inv
         H2 = D2_inv @ A2_inv
 
-        # normal
         p6, q6, p7, q7 = self.determine_dependent_points(points[:, :3])
 
-        Z = H1 @ np.column_stack((points[:, 4, 0], p6, p7))   # i = 5, 6, 7
-        W = H2 @ np.column_stack((points[:, 4, 1], q6, q7))   # i = 5, 6, 7
+        Z = H1 @ np.column_stack((points[:, 4, 0], p6, p7))     # i = 5, 6, 7
+        W = H2 @ np.column_stack((points[:, 4, 1], q6, q7))     # i = 5, 6, 7
 
-        # for the example in the paper
-        # Z = H1 @ points[:, 4:, 0]
-        # W = H2 @ points[:, 4:, 1]
+        if isMinimal: Z_extra, W_extra = None, None
+        else: Z_extra, W_extra = H1 @ points[:, 5:, 0], H2 @ points[:, 5:, 1]         # i = 6, ..., n
 
-        if not isMinimal:
-            Z_extra, W_extra = H1 @ points[:, 5:, 0], H2 @ points[:, 5:, 1]         # i = 6, ..., n
-        else:
-            Z_extra, W_extra = None, None
-
-        # punkte argmentieren
+        #---------- argment points
         iter_over = (0, )
         for i in range(len(iter_over) + (0 if Z_extra is None else Z_extra.shape[1])):
 
@@ -88,13 +87,14 @@ class VUmlaut(Model):
                 if abs(Z_extra[:, i][-1]) > delta: Z_extra[:, i] /= Z_extra[:, i][-1]
                 if abs(W_extra[:, i][-1]) > delta: W_extra[:, i] /= W_extra[:, i][-1]
 
-        #---------- bringing i = 6, 7 into barycentric coordinates: ]0, 1[
+        #---------- bringing i = 6, 7 into barycentric coordinates: !=0 and !=1
 
-        s11 = Z[:, 1][0] / (Z[:, 1][0] + Z[:, 1][1])       # s11 = z61 / (z61 + z62)
-        s21 = W[:, 1][0] / (W[:, 1][0] + W[:, 1][1])       # s21 = w61 / (w61 + w62)
+        barycentric_coord = lambda coord, other_index: (coord[0] / coord[other_index]) / (1 + coord[0] / coord[other_index])
+        s11 = barycentric_coord(Z[:, 1], 1)
+        s21 = barycentric_coord(W[:, 1], 1)
 
-        s12 = Z[:, -1][0] / (Z[:, -1][0] + Z[:, -1][-1])   # s12 = z71 / (z71 + z73)
-        s22 = W[:, -1][0] / (W[:, -1][0] + W[:, -1][-1])   # s22 = w71 / (w71 + w73)
+        s12 = barycentric_coord(Z[:, -1], -1)
+        s22 = barycentric_coord(W[:, -1], -1)
 
         Z[:, 1] = (s11, 1-s11, 0)
         W[:, 1] = (s21, 1-s21, 0)
@@ -116,11 +116,10 @@ class VUmlaut(Model):
         assert points.shape[1] >= 5, "Not enough points to continue"
         self.fit(points, False)
 
-    @staticmethod
-    def determine_dependent_points(points : ndarray) -> tuple:
+    def determine_dependent_points(self, points : ndarray) -> tuple:
 
         # let
-        s11, s21, s12, s22 = .5, .5, .5, .5         # todo jitter if neccessary
+        s11, s21, s12, s22 = [self.v_umlaut_sij] * 4
         p1 = points[:, 0, 0]
         q1 = points[:, 0, 1]
 
@@ -160,8 +159,11 @@ class VUmlaut(Model):
 
         # Gleichung 5, det constraint und wegwerfen von spurious fällen
         system.append(sp.expand(
-            ((W[:, -1][0] * Z[:, -1][-1] * f23) / (W[:, -1][-1] * Z[:, -1][0])
-             + (W[:, -2][0] * Z[:, -2][-2]) / (W[:, -2][-2] * Z[:, -2][0]))
+            (
+                    (W[:, -1][0] * Z[:, -1][-1] * W[:, -2][-2] * Z[:, -2][0] * f23)
+                    +
+                    (W[:, -2][0] * Z[:, -2][-2] * W[:, -1][-1] * Z[:, -1][0])
+            )
         ))
 
         #---------- solution of system
@@ -212,10 +214,10 @@ class VUmlaut(Model):
             b[i + 4] = -wi[2]*zi[1]
 
         # det constraint für rg = 2 und linearität
-        A[-1, 3] = (W[:, -1][0] * Z[:, -1][-1]) / (W[:, -1][-1] * Z[:, -1][0])
-        b[-1] = -(W[:, -2][0] * Z[:, -2][-2]) / (W[:, -2][-2] * Z[:, -2][0])
+        A[-1, 3] = W[:, -1][0] * Z[:, -1][-1] * W[:, -2][-2] * Z[:, -2][0]  # w71 * z73 * w62 * z61
+        b[-1] = -W[:, -2][0] * Z[:, -2][-2] * W[:, -1][-1] * Z[:, -1][0]    # w61 * z62 * w73 * z71
 
-        delta = 1e-6
+        delta = 1e-9
         A[np.abs(A) < delta] = 0
         b[np.abs(b) < delta] = 0
 
@@ -226,10 +228,6 @@ class VUmlaut(Model):
             [f[2], 0, f[3]],
             [f[4], 1, 0]
         ])
-
-        # for example in the paper
-        # print("Matrix-Methode:")
-        # print(F)
 
         return F
 
