@@ -11,6 +11,31 @@ from data.inn.synthetic.synthetic_data import *
 from os import path
 
 
+# --------------------------------------- TODO
+"""
+    - also positive projection
+    - 7 punkt v-umlaut configurationen synthetisch erzeugen
+    - zwei Korrenpondenzenmenge (i=6,7) und (j=6,7)
+    - eine als outlier bzw. pixelrauchen hinzufügen (i) und eine als echte Korrespondenz lassen
+    - daraus 2 F-Matrixen berechnen
+    - L2 loss zw. Fi und Fj und zw. Fi. und F_ground
+    - Beobachten wie groß die Abweichung ist und wie sich der Fehler im Vergleich zum Rauschen verhält? linear? exponentiell? 
+    - Daten sammeln und Kurve zeichnen
+    
+    Das sij problem:
+    
+    durch neuronales netz inference: mit vielen arten von synthetischen Kamerakonfigurationen und rauchsen tranieren was 5 punkte 
+    bekommt und ein s parameter ausgibt. resnet arch typ 
+    """
+
+# todo erfolgswahrscheinlichkeit für N bestimmung implementieren
+# todo epipolar linien visualisieren
+# todo Kongi framework für experimente
+# todo mehr dokumentation
+# -------------------------------------------
+
+
+
 def opencv_methode(points: np.ndarray, method = cv.FM_RANSAC) -> tuple[list, ndarray]:
     # points.shape (3, N, 2)
     pts1 = points[:2, :, 0].T  # (N, 2) shape for OpenCV
@@ -122,5 +147,6 @@ if __name__ == "__main__":
     ransac = Ransac(model, features, projection_threshold, useLO=True)
 
     run_with_ransac()
+
 
 
