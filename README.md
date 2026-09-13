@@ -26,8 +26,8 @@ Der Solver (`VUmlaut` in `models/v_umlaut_solver.py`) arbeitet in mehreren Schri
 2. **Erste baryzentrische Umformung (Virtuelle Korrespondenzen)** — vor der perspektivischen Normalisierung werden `p6`/`q6`/`p7`/`q7`
    als baryzentrische 2D-Midpoints auf den Verbindungsgeraden `p1–p2` bzw. `p1–p3` konstruiert, 
    gewichtet mit `v_umlaut_sij`.
-3. **Zweite baryzentrische Umformung** — nach der perspektivischen Transformation (`H1`, `H2`) werden die tranformierten 
-   virtuellen Punkte in barycentrische Koordinaten überführt.
+3. **Zweite baryzentrische Umformung** — nach der perspektivischen Transformation (`H1`, `H2`) werden die transformierten 
+   virtuellen Punkte in baryzentrische Koordinaten überführt.
 4. **Lösen des linearen Systems** auf zwei Wegen:
     - `symbolic_method` — symbolische Lösung via SymPy (`sp.linsolve`)
     - `matrix_method` — geschlossene 5×5-Matrixlösung via `numpy.linalg.lstsq`,
